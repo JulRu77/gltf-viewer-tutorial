@@ -12,6 +12,7 @@
 
 #include <stb_image_write.h>
 #include <tiny_gltf.h>
+#include <windows.h>
 
 void keyCallback(
     GLFWwindow *window, int key, int scancode, int action, int mods)
@@ -20,6 +21,33 @@ void keyCallback(
     glfwSetWindowShouldClose(window, 1);
   }
 }
+
+
+
+
+bool ViewerApplication::loadGltfFile(tinygltf::Model &model) { 
+    std::string path = m_gltfFilePath.string();
+
+    tinygltf::TinyGLTF loader;
+
+    std::string err, warn;
+
+    std::cout << "Current path is " << fs::current_path() << '\n';
+
+    bool ret = loader.LoadASCIIFromFile(&model, &err, &warn, path);
+
+
+    if (!err.empty())
+      std::cerr << "Err: " << err << std::endl;
+    if (!warn.empty())
+      std::cerr << "Warn: " << warn << std::endl;
+
+    if (!ret)
+      std::cerr << "Load failure for " << path << std::endl;
+
+    return ret;
+}
+
 
 int ViewerApplication::run()
 {
@@ -56,6 +84,8 @@ int ViewerApplication::run()
 
   tinygltf::Model model;
   // TODO Loading the glTF file
+  if (!loadGltfFile(model))
+    return -1;
 
   // TODO Creation of Buffer Objects
 
@@ -138,6 +168,7 @@ int ViewerApplication::run()
     }
 
     m_GLFWHandle.swapBuffers(); // Swap front and back buffers
+    Sleep(10);
   }
 
   // TODO clean up allocated GL data
