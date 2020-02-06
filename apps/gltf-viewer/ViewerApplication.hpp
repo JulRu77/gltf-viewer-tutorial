@@ -15,7 +15,7 @@ public:
       const std::string &vertexShader, const std::string &fragmentShader,
       const fs::path &output);
 
-  bool loadGltfFile(tinygltf::Model &model);
+  
 
   int run();
 
@@ -66,6 +66,7 @@ private:
     before most of OpenGL function calls.
   */
 
+  bool loadGltfFile(tinygltf::Model &model);
   std::vector<GLuint> createBufferObjects(const tinygltf::Model &model);
-
+  
 };
