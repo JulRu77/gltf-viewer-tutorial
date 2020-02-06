@@ -20,12 +20,17 @@ public:
   int run();
 
 private:
+
+
+
   // A range of indices in a vector containing Vertex Array Objects
   struct VaoRange
   {
     GLsizei begin; // Index of first element in vertexArrayObjects
     GLsizei count; // Number of elements in range
   };
+
+
 
   GLsizei m_nWindowWidth = 1280;
   GLsizei m_nWindowHeight = 720;
@@ -60,4 +65,7 @@ private:
     the creation of a GLFW windows and thus a GL context which must exists
     before most of OpenGL function calls.
   */
+
+  std::vector<GLuint> createBufferObjects(const tinygltf::Model &model);
+
 };
