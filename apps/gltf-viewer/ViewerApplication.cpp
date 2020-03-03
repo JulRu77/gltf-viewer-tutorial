@@ -349,6 +349,7 @@ int ViewerApplication::run()
     const auto strPath = m_OutputPath.string();
     stbi_write_png(
         strPath.c_str(), m_nWindowWidth, m_nWindowHeight, 3, pixels.data(), 0);
+    std::cout << "Png file generated: " << m_OutputPath << std::endl;
     return 0;
   }
 
