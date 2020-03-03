@@ -69,16 +69,16 @@ std::vector<GLuint> ViewerApplication::createVertexArrayObjects(
     vertexArrayObjects.resize(
         vertexArrayObjects.size() + currentMesh.primitives.size());
 
-    
+
 
     glGenVertexArrays(vaoRange.count, &vertexArrayObjects[vaoRange.begin]);
 
     for (size_t primitiveIdx = 0; primitiveIdx < currentMesh.primitives.size();
          primitiveIdx++) {
 
-        const auto vao = vertexArrayObjects[vaoRange.begin + primitiveIdx];
-        const auto &primitive = currentMesh.primitives[primitiveIdx];
-        glBindVertexArray(vao);
+      const auto vao = vertexArrayObjects[vaoRange.begin + primitiveIdx];
+      const auto &primitive = currentMesh.primitives[primitiveIdx];
+      glBindVertexArray(vao);
 
       {
         const auto iterator = primitive.attributes.find("POSITION");
@@ -228,35 +228,47 @@ int ViewerApplication::run()
   const auto normalMatrixLocation =
       glGetUniformLocation(glslProgram.glId(), "uNormalMatrix");
 
-  // Build projection matrix
-  auto maxDistance = 500.f; // TODO use scene bounds instead to compute this
-  maxDistance = maxDistance > 0.f ? maxDistance : 100.f;
-  const auto projMatrix =
-      glm::perspective(70.f, float(m_nWindowWidth) / m_nWindowHeight,
-          0.001f * maxDistance, 1.5f * maxDistance);
-
-  // TODO Implement a new CameraController model and use it instead. Propose the
-  // choice from the GUI
-  FirstPersonCameraController cameraController{
-      m_GLFWHandle.window(), 0.5f * maxDistance};
-  if (m_hasUserCamera) {
-    cameraController.setCamera(m_userCamera);
-  } else {
-    // TODO Use scene bounds to compute a better default camera
-    cameraController.setCamera(
-        Camera{glm::vec3(0, 0, 0), glm::vec3(0, 0, -1), glm::vec3(0, 1, 0)});
-  }
-
   tinygltf::Model model;
 
   if (!loadGltfFile(model))
     return -1;
 
-  auto & bufferObjects = createBufferObjects(model);
+  auto &bufferObjects = createBufferObjects(model);
 
   std::vector<VaoRange> meshToVertexArrays;
   const auto vertexArrayObjects =
       createVertexArrayObjects(model, bufferObjects, meshToVertexArrays);
+  
+  // For the projection matrix
+  auto maxDistance = 500.f; // TODO use scene bounds instead to compute this
+  
+  // NEXT TODO: Camera Control
+  FirstPersonCameraController cameraController{
+      m_GLFWHandle.window(), 0.5f * maxDistance};
+
+  if (m_hasUserCamera) {
+    std::cout << "Using user camera " << std::endl;
+    cameraController.setCamera(m_userCamera);
+  } else {
+    glm::vec3 bboxMin, bboxMax;
+    computeSceneBounds(model, bboxMin, bboxMax);
+
+    const auto upVec = glm::vec3(0, 1, 0);
+    auto bboxCenter = (bboxMax + bboxMin) / 2.f;
+    auto bboxDiag = bboxMax - bboxMin;
+    auto eye = bboxDiag.z > 0 ? bboxCenter + bboxDiag
+                              : bboxCenter + 2.0f * glm::cross(bboxDiag, upVec);
+
+    cameraController.setCamera(Camera{bboxCenter, eye, upVec});
+
+    maxDistance = glm::length(bboxDiag);
+    std::cout << "Diag: " << bboxDiag << std::endl;
+  }
+
+  maxDistance = maxDistance > 0.f ? maxDistance : 100.f;
+  const auto projMatrix =
+      glm::perspective(70.f, float(m_nWindowWidth) / m_nWindowHeight,
+          0.001f * maxDistance, 1.5f * maxDistance); 
 
   // Setup OpenGL state for rendering
   glEnable(GL_DEPTH_TEST);
@@ -327,7 +339,7 @@ int ViewerApplication::run()
   };
 
 
-    //RENDER
+  //RENDER
   if (!m_OutputPath.empty()){
     std::vector<unsigned char> pixels( 3L * m_nWindowWidth * m_nWindowHeight);
     renderToImage(m_nWindowWidth, m_nWindowHeight, 3, pixels.data(),
