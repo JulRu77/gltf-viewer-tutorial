@@ -107,4 +107,88 @@ bool FirstPersonCameraController::update(float elapsedTime)
   return true;
 }
 
-bool TrackballCameraController::update(float elapsedTime) { return false; }
+bool TrackballCameraController::update(float elapsedTime) { 
+      if (glfwGetMouseButton(m_pWindow, GLFW_MOUSE_BUTTON_MIDDLE) &&
+      !m_MiddleButtonPressed) {
+    m_MiddleButtonPressed = true;
+    glfwGetCursorPos(
+        m_pWindow, &m_LastCursorPosition.x, &m_LastCursorPosition.y);
+  } else if (!glfwGetMouseButton(m_pWindow, GLFW_MOUSE_BUTTON_MIDDLE) &&
+                 m_MiddleButtonPressed) {
+        m_MiddleButtonPressed = false;
+  }
+
+  const auto cursorDelta = ([&]() {
+    if (m_MiddleButtonPressed) {
+      dvec2 cursorPosition;
+      glfwGetCursorPos(m_pWindow, &cursorPosition.x, &cursorPosition.y);
+      const auto delta = cursorPosition - m_LastCursorPosition;
+      m_LastCursorPosition = cursorPosition;
+      return delta;
+    }
+    return dvec2(0);
+  })();
+
+
+    if (glfwGetKey(m_pWindow, GLFW_KEY_LEFT_SHIFT)) {//Pan the camera
+        const auto horizontalMovement = 0.01f * float(cursorDelta.x);
+        const auto verticalMovement = 0.01f * float(cursorDelta.y);
+
+        m_camera.moveLocal(horizontalMovement, verticalMovement, 0.f);
+        return true;
+    }
+
+    if (glfwGetKey(m_pWindow, GLFW_KEY_LEFT_CONTROL)) {//Zoom with the camera
+    
+        auto mouseOffsetX = 0.01f * float(cursorDelta.x);
+        if (mouseOffsetX == 0.f)
+            return false;
+        
+        // We need to move along the view vector of the camera
+        const auto viewVector = m_camera.center() - m_camera.eye();
+        const auto l = glm::length(viewVector);
+        if (mouseOffsetX > 0.f) {
+          // We don't want to move more that the length of the view vector
+          // (cannot go beyond target)
+          mouseOffsetX = glm::min(mouseOffsetX, l - 1e-4f);
+        }
+        // Normalize view vector for the translation
+        const auto front = viewVector / l;
+        const auto translationVector = mouseOffsetX * front;
+        // Update camera with new eye position
+        const auto newEye = m_camera.eye() + translationVector;
+        m_camera = Camera(newEye, m_camera.center(), m_worldUpAxis);
+
+    return true;
+  }
+
+  // Rotate around the target
+  const auto longitudeAngle = -0.01f * float(cursorDelta.x);// Horizontal angle
+  const auto latitudeAngle = 0.01f * float(cursorDelta.y); // Vertical angle
+
+  const auto hasMoved = latitudeAngle != 0.f || longitudeAngle != 0.f;
+  if (!hasMoved) {
+    return false;
+  }
+
+  const auto depthAxis = m_camera.eye() - m_camera.center();
+
+  // Start with the vertical rotation, which is done around the horizontal axis
+  // of the camera and can be obtained with left()
+  const auto horizontalAxis = m_camera.left();
+  const auto longitudeRotationMatrix =
+      rotate(mat4(1), latitudeAngle, horizontalAxis);
+  auto rotatedDepthAxis = vec3(longitudeRotationMatrix * vec4(depthAxis, 0));
+
+  // Then the horizontal rotation, which is done around the world up axis.
+  const auto latitudeRotationMatrix =
+      rotate(mat4(1), longitudeAngle, m_worldUpAxis);
+  const auto finalDepthAxis =
+      vec3(latitudeRotationMatrix * vec4(rotatedDepthAxis, 0));
+
+  // Update camera with new eye position
+  const auto newEye = m_camera.center() + finalDepthAxis;
+  m_camera = Camera(newEye, m_camera.center(), m_worldUpAxis);
+    
+    return true; 
+}

@@ -248,7 +248,7 @@ int ViewerApplication::run()
   auto maxDistance = glm::length(bboxDiag);
   if(maxDistance <= 0.f)
       maxDistance = 100.f;
-  FirstPersonCameraController cameraController{
+  TrackballCameraController cameraController{
       m_GLFWHandle.window(), 0.5f * maxDistance};
 
   if (m_hasUserCamera) {
