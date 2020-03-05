@@ -7,6 +7,15 @@ uniform vec3 uLightDirection;
 uniform vec3 uLightIntensity;
 
 uniform sampler2D uBaseColorTexture;
+uniform vec4 uBaseColorFactor;
+
+uniform float uMetallicFactor;
+// Roughness
+uniform float uRoughnessFactor;
+uniform sampler2D uMetallicRoughnessTexture;
+// Emissive
+uniform sampler2D uEmissiveTexture;
+uniform vec3 uEmissiveFactor;
 
 out vec3 fColor;
 
@@ -38,9 +47,9 @@ void main()
   vec3 L = uLightDirection;
 
   vec4 baseColorFromTexture =
-      SRGBtoLINEAR(texture(uBaseColorTexture, vTexCoords));
+      SRGBtoLINEAR(texture(uBaseColorTexture, vTexCoords)) * uBaseColorFactor;
   float NdotL = clamp(dot(N, L), 0, 1);
   vec3 diffuse = baseColorFromTexture.rgb * M_1_PI;
 
-  fColor = LINEARtoSRGB(diffuse * uLightIntensity * NdotL);
+    fColor = LINEARtoSRGB(diffuse * uLightIntensity * NdotL);
 }
