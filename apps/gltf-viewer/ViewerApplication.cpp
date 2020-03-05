@@ -239,10 +239,15 @@ int ViewerApplication::run()
   const auto vertexArrayObjects =
       createVertexArrayObjects(model, bufferObjects, meshToVertexArrays);
   
-  // For the projection matrix
-  auto maxDistance = 500.f; // TODO use scene bounds instead to compute this
-  
-  // NEXT TODO: Camera Control
+
+  glm::vec3 bboxMin, bboxMax;
+  computeSceneBounds(model, bboxMin, bboxMax);
+  const auto bboxDiag = bboxMax - bboxMin;
+
+  // For the projection matrix and camera init
+  auto maxDistance = glm::length(bboxDiag);
+  if(maxDistance <= 0.f)
+      maxDistance = 100.f;
   FirstPersonCameraController cameraController{
       m_GLFWHandle.window(), 0.5f * maxDistance};
 
@@ -250,22 +255,16 @@ int ViewerApplication::run()
     std::cout << "Using user camera " << std::endl;
     cameraController.setCamera(m_userCamera);
   } else {
-    glm::vec3 bboxMin, bboxMax;
-    computeSceneBounds(model, bboxMin, bboxMax);
-
     const auto upVec = glm::vec3(0, 1, 0);
-    auto bboxCenter = (bboxMax + bboxMin) / 2.f;
-    auto bboxDiag = bboxMax - bboxMin;
-    auto eye = bboxDiag.z > 0 ? bboxCenter + bboxDiag
+    const auto bboxCenter = (bboxMax + bboxMin) * 0.5f;
+    const auto eye = bboxDiag.z > 0 ? bboxCenter + bboxDiag
                               : bboxCenter + 2.0f * glm::cross(bboxDiag, upVec);
 
-    cameraController.setCamera(Camera{bboxCenter, eye, upVec});
-
-    maxDistance = glm::length(bboxDiag);
+    cameraController.setCamera(Camera{eye, bboxCenter, upVec});
+    
     std::cout << "Diag: " << bboxDiag << std::endl;
   }
 
-  maxDistance = maxDistance > 0.f ? maxDistance : 100.f;
   const auto projMatrix =
       glm::perspective(70.f, float(m_nWindowWidth) / m_nWindowHeight,
           0.001f * maxDistance, 1.5f * maxDistance); 
