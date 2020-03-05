@@ -76,8 +76,9 @@ void main()
     float shlickFactor = baseShlickFactor * baseShlickFactor; // power 2
     shlickFactor *= shlickFactor;                             // power 4
     shlickFactor *= baseShlickFactor;                         // power 5
+    //shlickFactor value is used
 
-    vec3 F = F0 + (vec3(1) - F0) * (1 - VdotH) * shlickFactor;
+    vec3 F = F0 + (vec3(1) - F0)  * shlickFactor;
     
     vec3 f_diffuse = (1 - F) * diffuse;
 
