@@ -36,20 +36,26 @@ vec3 LINEARtoSRGB(vec3 color) { return pow(color, vec3(INV_GAMMA)); }
 
 // sRGB to linear approximation
 // see http://chilliant.blogspot.com/2012/08/srgb-approximations-for-hlsl.html
-vec4 SRGBtoLINEAR(vec4 srgbIn)
-{
-  return vec4(pow(srgbIn.xyz, vec3(GAMMA)), srgbIn.w);
-}
+vec4 SRGBtoLINEAR(vec4 srgbIn){ return vec4(pow(srgbIn.xyz, vec3(GAMMA)), srgbIn.w);}
 
 void main()
 {
-  vec3 N = normalize(vViewSpaceNormal);
-  vec3 L = uLightDirection;
+    vec3 N = normalize(vViewSpaceNormal);
+    vec3 L = uLightDirection;
 
-  vec4 baseColorFromTexture =
-      SRGBtoLINEAR(texture(uBaseColorTexture, vTexCoords)) * uBaseColorFactor;
-  float NdotL = clamp(dot(N, L), 0, 1);
-  vec3 diffuse = baseColorFromTexture.rgb * M_1_PI;
+    vec4 baseColorFromTexture =
+        SRGBtoLINEAR(texture(uBaseColorTexture, vTexCoords)) * uBaseColorFactor;
+    
+
+    float NdotL = clamp(dot(N, L), 0, 1);
+    vec3 diffuse = baseColorFromTexture.rgb * M_1_PI;
+
+    //Metallic value is from the blue of the vector
+    vec3 metallic = vec3(uMetallicFactor * metallicRougnessFromTexture.b);
+    //Roughness value is from the green of the vector
+    float roughness = uRoughnessFactor * metallicRougnessFromTexture.g;
+
+
 
     fColor = LINEARtoSRGB(diffuse * uLightIntensity * NdotL);
 }
