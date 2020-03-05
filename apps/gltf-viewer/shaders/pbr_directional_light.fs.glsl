@@ -1,5 +1,6 @@
 #version 330
 
+in vec3 vViewSpacePosition;
 in vec3 vViewSpaceNormal;
 in vec2 vTexCoords;
 
@@ -42,20 +43,56 @@ void main()
 {
     vec3 N = normalize(vViewSpaceNormal);
     vec3 L = uLightDirection;
+    vec3 V = normalize(-vViewSpacePosition);
+    vec3 H = normalize(L + V);
 
-    vec4 baseColorFromTexture =
+    vec4 baseColor =
         SRGBtoLINEAR(texture(uBaseColorTexture, vTexCoords)) * uBaseColorFactor;
+    vec4 metallicRougnessFromTexture =
+        texture(uMetallicRoughnessTexture, vTexCoords);
     
-
     float NdotL = clamp(dot(N, L), 0, 1);
-    vec3 diffuse = baseColorFromTexture.rgb * M_1_PI;
+    float NdotV = clamp(dot(N, V), 0, 1);
+    float NdotH = clamp(dot(N, H), 0, 1);
+    float VdotH = clamp(dot(V, H), 0, 1);
+
+    vec3 diffuse = baseColor.rgb * M_1_PI;
 
     //Metallic value is from the blue of the vector
     vec3 metallic = vec3(uMetallicFactor * metallicRougnessFromTexture.b);
     //Roughness value is from the green of the vector
     float roughness = uRoughnessFactor * metallicRougnessFromTexture.g;
 
+    //From https://github.com/KhronosGroup/glTF/tree/master/specification/2.0#appendix-b-brdf-implementation
+    vec3 dielectricSpecular = vec3(0.04, 0.04, 0.04);
+    vec3 black = vec3(0.f, 0.f, 0.f);
 
+    vec3 cdiff = mix(baseColor.rgb * (1 - dielectricSpecular.r), black, metallic);
+    vec3 F0 = mix(vec3(dielectricSpecular), baseColor.rgb, metallic);
+    float alpha = roughness * roughness;
 
-    fColor = LINEARtoSRGB(diffuse * uLightIntensity * NdotL);
+    // Faster power of 5
+    float baseShlickFactor = 1 - VdotH;
+    float shlickFactor = baseShlickFactor * baseShlickFactor; // power 2
+    shlickFactor *= shlickFactor;                             // power 4
+    shlickFactor *= baseShlickFactor;                         // power 5
+
+    vec3 F = F0 + (vec3(1) - F0) * (1 - VdotH) * shlickFactor;
+    
+    vec3 f_diffuse = (1 - F) * diffuse;
+
+    //For code visibility
+    float sqrAlpha = alpha * alpha;
+    //Denomitator could be 0
+    float visDenominator =
+        NdotL * sqrt((NdotV * NdotV) * (1 - sqrAlpha) + sqrAlpha) +
+        NdotV * sqrt((NdotL * NdotL) * (1 - sqrAlpha) + sqrAlpha);
+    float vis = visDenominator > 0. ? 0.5 / visDenominator : 0.0;
+
+    float denom = M_PI * ((NdotH * NdotH) * (sqrAlpha -1) + 1);
+    float D = (sqrAlpha) / (M_PI * (denom * denom));
+    
+    vec3 f_specular = F * vis * D;
+    F = f_diffuse + f_specular;
+    fColor = LINEARtoSRGB((f_diffuse + f_specular) * uLightIntensity * NdotL);
 }
