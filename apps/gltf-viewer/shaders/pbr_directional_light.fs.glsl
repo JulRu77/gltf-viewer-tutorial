@@ -93,6 +93,14 @@ void main()
     float D = (sqrAlpha) / (M_PI * (denom * denom));
     
     vec3 f_specular = F * vis * D;
-    F = f_diffuse + f_specular;
-    fColor = LINEARtoSRGB((f_diffuse + f_specular) * uLightIntensity * NdotL);
+    
+    //Specular result
+    vec3 color = (f_diffuse + f_specular) * uLightIntensity * NdotL;
+
+    vec3 emissive = SRGBtoLINEAR(texture2D(uEmissiveTexture, vTexCoords)).rgb *
+                    uEmissiveFactor;
+    //Texture self-lighting
+    color += emissive;
+
+    fColor = LINEARtoSRGB(color);
 }
