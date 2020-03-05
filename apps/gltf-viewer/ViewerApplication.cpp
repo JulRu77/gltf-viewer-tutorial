@@ -56,9 +56,6 @@ std::vector<GLuint> ViewerApplication::createVertexArrayObjects(
   for (size_t meshIdx = 0; meshIdx < model.meshes.size(); meshIdx++) {
     const auto & currentMesh = model.meshes[meshIdx];
 
-
-
-
     auto &vaoRange = meshToVertexArrays[meshIdx];
     vaoRange.begin =
         GLsizei(vertexArrayObjects.size()); // Range for this mesh will be at
@@ -68,8 +65,6 @@ std::vector<GLuint> ViewerApplication::createVertexArrayObjects(
 
     vertexArrayObjects.resize(
         vertexArrayObjects.size() + currentMesh.primitives.size());
-
-
 
     glGenVertexArrays(vaoRange.count, &vertexArrayObjects[vaoRange.begin]);
 
@@ -201,7 +196,6 @@ bool ViewerApplication::loadGltfFile(tinygltf::Model &model) {
 
   bool ret = loader.LoadASCIIFromFile(&model, &err, &warn, path);
 
-
   if (!err.empty())
     std::cerr << "Err: " << err << std::endl;
   if (!warn.empty())
@@ -212,7 +206,6 @@ bool ViewerApplication::loadGltfFile(tinygltf::Model &model) {
 
   return ret;
 }
-
 
 int ViewerApplication::run()
 {
@@ -227,18 +220,27 @@ int ViewerApplication::run()
       glGetUniformLocation(glslProgram.glId(), "uModelViewMatrix");
   const auto normalMatrixLocation =
       glGetUniformLocation(glslProgram.glId(), "uNormalMatrix");
+  // Light for diffuse_directional_light.fs.glsl
+  const auto lightDirectionLocation =
+      glGetUniformLocation(glslProgram.glId(), "uLightDirection");
+  const auto lightIntensityLocation =
+      glGetUniformLocation(glslProgram.glId(), "uLightIntensity");
 
   tinygltf::Model model;
 
   if (!loadGltfFile(model))
     return -1;
 
+  // Light init
+  auto lightDirection = glm::vec3(1, 1, 1);
+  auto lightIntensity = glm::vec3(1, 1, 1);
+  bool lightIsFromCamera = false;
+
   auto &bufferObjects = createBufferObjects(model);
 
   std::vector<VaoRange> meshToVertexArrays;
   const auto vertexArrayObjects =
       createVertexArrayObjects(model, bufferObjects, meshToVertexArrays);
-  
 
   glm::vec3 bboxMin, bboxMax;
   computeSceneBounds(model, bboxMin, bboxMax);
@@ -246,8 +248,8 @@ int ViewerApplication::run()
 
   // For the projection matrix and camera init
   auto maxDistance = glm::length(bboxDiag);
-  if(maxDistance <= 0.f)
-      maxDistance = 100.f;
+  if (maxDistance <= 0.f)
+    maxDistance = 100.f;
   TrackballCameraController cameraController{
       m_GLFWHandle.window(), 0.5f * maxDistance};
 
@@ -257,17 +259,18 @@ int ViewerApplication::run()
   } else {
     const auto upVec = glm::vec3(0, 1, 0);
     const auto bboxCenter = (bboxMax + bboxMin) * 0.5f;
-    const auto eye = bboxDiag.z > 0 ? bboxCenter + bboxDiag
-                              : bboxCenter + 2.0f * glm::cross(bboxDiag, upVec);
+    const auto eye = bboxDiag.z > 0
+                         ? bboxCenter + bboxDiag
+                         : bboxCenter + 2.0f * glm::cross(bboxDiag, upVec);
 
     cameraController.setCamera(Camera{eye, bboxCenter, upVec});
-    
+
     std::cout << "Diag: " << bboxDiag << std::endl;
   }
 
   const auto projMatrix =
       glm::perspective(70.f, float(m_nWindowWidth) / m_nWindowHeight,
-          0.001f * maxDistance, 1.5f * maxDistance); 
+          0.001f * maxDistance, 1.5f * maxDistance);
 
   // Setup OpenGL state for rendering
   glEnable(GL_DEPTH_TEST);
@@ -280,6 +283,26 @@ int ViewerApplication::run()
 
     const auto viewMatrix = camera.getViewMatrix();
 
+    // The light is constant for 1 draw
+
+    if (lightDirectionLocation >= 0) {
+
+      if (lightIsFromCamera) // From the camera
+        glUniform3f(lightDirectionLocation, 0, 0,
+            1); // Don't change the lightDirection value
+      else {
+        const auto lightDirectionInViewSpace = glm::normalize(
+            glm::vec3(viewMatrix * glm::vec4(lightDirection, 0.)));
+
+        glUniform3f(lightDirectionLocation, lightDirectionInViewSpace[0],
+            lightDirectionInViewSpace[1], lightDirectionInViewSpace[2]);
+      }
+    }
+
+    if (lightIntensityLocation >= 0)
+      glUniform3f(lightIntensityLocation, lightIntensity[0], lightIntensity[1],
+          lightIntensity[2]);
+
     // The recursive function that should draw a node
     // We use a std::function because a simple lambda cannot be recursive
     const std::function<void(int, const glm::mat4 &)> drawNode =
@@ -291,12 +314,10 @@ int ViewerApplication::run()
             const auto mvMatrix = viewMatrix * modelMatrix;
             const auto mvpMatrix = projMatrix * mvMatrix;
 
-
             const auto normalMatrix = glm::transpose(glm::inverse(mvMatrix));
 
             const auto &mesh = model.meshes[node.mesh];
             const auto &vaoRange = meshToVertexArrays[node.mesh];
-
 
             glUniformMatrix4fv(modelViewProjMatrixLocation, 1, GL_FALSE,
                 glm::value_ptr(mvpMatrix));
@@ -323,7 +344,6 @@ int ViewerApplication::run()
                 const auto &accessor = model.accessors[accessorIdx];
                 glDrawArrays(primitive.mode, 0, GLsizei(accessor.count));
               }
-
             }
           }
         };
@@ -352,6 +372,7 @@ int ViewerApplication::run()
     return 0;
   }
 
+  // LOOP (input + update + render)
   // Loop until the user closes the window
   for (auto iterationCount = 0u; !m_GLFWHandle.shouldClose();
        ++iterationCount) {
@@ -389,7 +410,31 @@ int ViewerApplication::run()
           const auto str = ss.str();
           glfwSetClipboardString(m_GLFWHandle.window(), str.c_str());
         }
+      } // Camera
+
+      if (ImGui::CollapsingHeader("Light", ImGuiTreeNodeFlags_DefaultOpen)) {
+        static float lightTheta = 0.f, lightPhi = 0.f;
+
+        if (ImGui::SliderFloat("theta", &lightTheta, 0, glm::pi<float>()) ||
+            ImGui::SliderFloat("phi", &lightPhi, 0, 2.f * glm::pi<float>())) {
+          const auto sinTheta = glm::sin(lightTheta);
+          const auto cosTheta = glm::cos(lightTheta);
+          const auto sinPhi = glm::sin(lightPhi);
+          const auto cosPhi = glm::cos(lightPhi);
+          lightDirection =
+              glm::vec3(sinTheta * cosPhi, cosTheta, sinTheta * sinPhi);
+        }
+
+        static glm::vec3 lightColor(1.f, 1.f, 1.f);
+        static float lightIntensityFactor = 1.f;
+
+        if (ImGui::ColorEdit3("color", (float *)&lightColor) ||
+            ImGui::InputFloat("intensity", &lightIntensityFactor)) {
+          lightIntensity = lightColor * lightIntensityFactor;
+        }
       }
+      ImGui::Checkbox("Put the light on the camera", &lightIsFromCamera);
+
       ImGui::End();
     }
 
