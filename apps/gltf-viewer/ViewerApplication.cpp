@@ -184,6 +184,46 @@ std::vector<GLuint> ViewerApplication::createVertexArrayObjects(
 
   return vertexArrayObjects;
 }
+//TO BE VERIFIED!
+std::vector<GLuint> ViewerApplication::createTextureObjects(
+    const tinygltf::Model &model) const {
+
+    const int nbOfTextures = model.textures.size();
+
+    GLuint *textures = (GLuint *)malloc(nbOfTextures * sizeof(GLuint));
+    if (textures == nullptr)
+        return std::vector<GLuint>();
+
+    // Generate the textures objects
+    glGenTextures(nbOfTextures, textures);
+
+    for (int i = 0; i < model.textures.size(); i++) {
+
+        // Assume a texture object has been created and bound to GL_TEXTURE_2D
+        const auto &texture = model.textures[i]; // get i-th texture
+        assert(texture.source >= 0);             // ensure a source image is present
+        const auto &image = model.images[texture.source]; // get the image
+
+
+        glBindTexture(
+            GL_TEXTURE_2D, textures[i]); // Bind to target GL_TEXTURE_2D
+
+        // fill the texture object with the data from the image
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.width, image.height, 0,
+            GL_RGBA, image.pixel_type, image.image.data());
+  
+
+    // Set sampling parameters
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    // Set wrapping parameters
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_R, GL_REPEAT);
+  }
+    glBindTexture(GL_TEXTURE_2D, 0);
+    return std::vector<GLuint>();
+};
 
 bool ViewerApplication::loadGltfFile(tinygltf::Model &model) {
   std::string path = m_gltfFilePath.string();
@@ -225,6 +265,10 @@ int ViewerApplication::run()
       glGetUniformLocation(glslProgram.glId(), "uLightDirection");
   const auto lightIntensityLocation =
       glGetUniformLocation(glslProgram.glId(), "uLightIntensity");
+  // Textures
+  const auto baseColorTextureLocation =
+      glGetUniformLocation(glslProgram.glId(), "uBaseColorTexture");
+  
 
   tinygltf::Model model;
 
@@ -235,6 +279,27 @@ int ViewerApplication::run()
   auto lightDirection = glm::vec3(1, 1, 1);
   auto lightIntensity = glm::vec3(1, 1, 1);
   bool lightIsFromCamera = false;
+
+  //Texture load
+  auto textureObjects = createTextureObjects(model);
+  //Default white texture
+  float white[] = {1,1,1,1};
+  GLuint whiteTexture;
+  // Generate the texture object
+  glGenTextures(1, &whiteTexture);
+  
+  glBindTexture(GL_TEXTURE_2D, whiteTexture); // Bind to target GL_TEXTURE_2D
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_FLOAT, white); // Set image data
+  // Set sampling parameters
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  // Set wrapping parameters
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_R, GL_REPEAT);
+
+  glBindTexture(GL_TEXTURE_2D, 0);
+
 
   auto &bufferObjects = createBufferObjects(model);
 
