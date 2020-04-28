@@ -262,6 +262,48 @@ bool ViewerApplication::loadGltfFile(tinygltf::Model &model) {
   return ret;
 }
 
+void setUniformVec3(
+    const GLProgram &prog, const std::string &name, const glm::vec3 &vec)
+{
+  glUniform3f(
+      glGetUniformLocation(prog.glId(), name.c_str()), vec[0], vec[1], vec[2]);
+}
+
+void setUniformFloat(
+    const GLProgram &prog, const std::string &name, float value)
+{
+  glUniform1f(glGetUniformLocation(prog.glId(), name.c_str()), value);
+}
+
+
+typedef struct
+{
+  glm::vec3 position;
+  glm::vec3 color;
+  float intensityFactor;
+  float attenuationDistance; 
+  float constantAttenuator = 1.0f;
+  float linearAttenuator;
+  float quadraticAttenuator;
+  bool enabled = true;
+} PointLightStruct;
+
+
+typedef struct
+{
+  glm::vec3 position;
+  glm::vec3 color;
+  float intensityFactor;
+  glm::vec3 direction;
+  float cutOff;
+  float outerCutOff;
+  float distAttenuation; 
+  float constantAttenuator = 1.0f;
+  float linearAttenuator;
+  float quadraticAttenuator;
+  bool enabled = true;
+} SpotLightStruct;
+
 int ViewerApplication::run()
 {
   // Loader shaders
@@ -297,7 +339,7 @@ int ViewerApplication::run()
   const auto emissiveTextureLocation =
       glGetUniformLocation(glslProgram.glId(), "uEmissiveTexture");
   
-  
+
 
   tinygltf::Model model;
 
@@ -370,6 +412,27 @@ int ViewerApplication::run()
   glEnable(GL_DEPTH_TEST);
   glslProgram.use();
 
+  // Point lights
+  const unsigned int nbPointLights = 4;
+  PointLightStruct pointLights[nbPointLights];
+
+
+  pointLights[0] = {(bboxMin + bboxMax) / 2.f, glm::vec3(1, 1, 1), 1.0f, 
+      32.f,
+      1.0f, 0.14f, 0.07f};
+  pointLights[1] = {
+      bboxMin, glm::vec3(1, 0, 0), 1.0f, 50.f, 1.0f, 0.09f, 0.032f};
+  pointLights[2] = {glm::vec3(bboxMin[0], bboxMax[1], bboxMax[2]),
+      glm::vec3(0, 1, 0), 1.0f, 20.f, 1.0f, 0.22f, 0.20f};
+  pointLights[3] = {glm::vec3(bboxMin[0], bboxMax[1], bboxMin[2]),
+      glm::vec3(0, 0.35, 1), 1.0f, 13.f, 1.0f, 0.35f, 0.44f};
+
+
+  SpotLightStruct spotLight = {
+      glm::vec3(0.f, 0.f, 0.f),
+      glm::vec3(1.f, 0.91f, 0.3f),
+      1.0f,
+      glm::vec3(0, 0, 0), 7.5f, 13.5f, 100.f, 1.0f, 0.045f, 0.0075f};
 
   const auto bindMaterial = [&](const auto materialIndex) {
     if (materialIndex >= 0) {
@@ -379,7 +442,7 @@ int ViewerApplication::run()
       const auto &pbrMetallicRoughness = material.pbrMetallicRoughness;
       const auto &emissiveFactor = material.emissiveFactor;
       const auto &emissiveTexture = material.emissiveTexture;
-
+      
 
       if (pbrMetallicRoughness.baseColorTexture.index >= 0) {
         const tinygltf::Texture &texture =
@@ -481,6 +544,76 @@ int ViewerApplication::run()
     if (lightIntensityLocation >= 0)
       glUniform3f(lightIntensityLocation, lightIntensity[0], lightIntensity[1],
           lightIntensity[2]);
+    
+    for (int i = 0; i < nbPointLights; i++) {
+      PointLightStruct pointLight = pointLights[i];
+      std::string id_str = std::to_string(i);
+
+      if (!pointLight.enabled) {
+        setUniformVec3(glslProgram, ("pointLights[" + id_str + "].intensity").c_str(),
+            glm::vec3(0.f));
+      } else {
+
+        setUniformVec3(glslProgram, ("pointLights[" + id_str + "].position").c_str(),
+            glm::vec3(viewMatrix * glm::vec4(pointLight.position, 1)));
+        setUniformVec3(glslProgram, ("pointLights[" + id_str + "].intensity").c_str(),
+            pointLight.color * pointLight.intensityFactor);
+        setUniformFloat(glslProgram,
+            ("pointLights[" + id_str + "].attenuationDistance").c_str(),
+            pointLight.attenuationDistance);
+
+        setUniformFloat(glslProgram,
+            ("pointLights[" + id_str + "].constantAttenuator").c_str(),
+            pointLight.constantAttenuator);
+        setUniformFloat(glslProgram,
+            ("pointLights[" + id_str + "].linearAttenuator").c_str(),
+            pointLight.linearAttenuator);
+        setUniformFloat(glslProgram,
+            ("pointLights[" + id_str + "].quadraticAttenuator").c_str(),
+            pointLight.quadraticAttenuator);
+      }
+    }
+
+
+    if (glfwGetKey(m_GLFWHandle.window(), GLFW_KEY_F)) {
+      double xpos, ypos;
+      glfwGetCursorPos(m_GLFWHandle.window(), &xpos, &ypos);
+      spotLight.direction =
+          glm::vec3(float((xpos - m_nWindowWidth / 2) / m_nWindowWidth),
+              float(-(ypos - m_nWindowHeight / 2) / m_nWindowHeight), -1);
+    }
+    
+
+
+    if (!spotLight.enabled) {
+      setUniformVec3(glslProgram, "spotlight.LightIntensity", glm::vec3(0.f));
+    } else {
+      
+
+      setUniformVec3(glslProgram, "spotlight.LightPosition", spotLight.position);
+      setUniformVec3(glslProgram, "spotlight.LightIntensity", spotLight.color * spotLight.intensityFactor);
+      setUniformVec3(glslProgram, "spotlight.LightDirection", spotLight.direction);
+
+      setUniformFloat(glslProgram,
+          "spotlight.constantAttenuator",
+          spotLight.constantAttenuator);
+      setUniformFloat(glslProgram,
+          "spotlight.linearAttenuator",
+          spotLight.linearAttenuator);
+      setUniformFloat(glslProgram,
+          "spotlight.quadraticAttenuator",
+          spotLight.quadraticAttenuator);
+
+
+      setUniformFloat(glslProgram, "spotlight.CutOff",
+          glm::cos(glm::radians(spotLight.cutOff)));
+
+      setUniformFloat(glslProgram, "spotlight.OuterCutOff",
+          glm::cos(glm::radians(spotLight.outerCutOff)));
+
+      setUniformFloat(
+          glslProgram, "spotlight.DistAttenuation", spotLight.distAttenuation);
+    }
 
     // The recursive function that should draw a node
     // We use a std::function because a simple lambda cannot be recursive
@@ -488,7 +621,7 @@ int ViewerApplication::run()
         [&](int nodeIdx, const glm::mat4 &parentMatrix) {
           const tinygltf::Node node = model.nodes[nodeIdx];
           glm::mat4 modelMatrix = getLocalToWorldMatrix(node, parentMatrix);
-
+          
           if (node.mesh >= 0) {
             const auto mvMatrix = viewMatrix * modelMatrix;
             const auto mvpMatrix = projMatrix * mvMatrix;
@@ -615,7 +748,7 @@ int ViewerApplication::run()
           lightIntensity = lightColor * lightIntensityFactor;
         }
       }
-      ImGui::Checkbox("Put the light on the camera", &lightIsFromCamera);
+        ImGui::Checkbox("Make the directional light parallel to the camera", &lightIsFromCamera);
 
       ImGui::End();
     }
@@ -649,7 +782,7 @@ ViewerApplication::ViewerApplication(const fs::path &appPath, uint32_t width,
     m_AppPath{appPath},
     m_AppName{m_AppPath.stem().string()},
     m_ImGuiIniFilename{m_AppName + ".imgui.ini"},
-    m_ShadersRootPath{m_AppPath.parent_path() / "shaders"},
+    m_ShadersRootPath{m_AppPath.parent_path() / "shaders"},  
     m_gltfFilePath{gltfFile},
     m_OutputPath{output}
 {
