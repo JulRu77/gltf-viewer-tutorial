@@ -748,7 +748,21 @@ int ViewerApplication::run()
           lightIntensity = lightColor * lightIntensityFactor;
         }
       }
-        ImGui::Checkbox("Make the directional light parallel to the camera", &lightIsFromCamera);
+      ImGui::Checkbox("Make the directional light parallel to the camera", &lightIsFromCamera);
+      
+      ImGui::Checkbox("Enable spotlight on the camera", &(spotLight.enabled));
+      ImGui::ColorEdit3("Spot color ", (float *)&((spotLight.color)));
+      ImGui::InputFloat("Spot intensity ", &((spotLight.intensityFactor)));
+
+      for (int i = 0; i < nbPointLights; i++) {
+        ImGui::Checkbox(
+            ("Enable pointlight " + std::to_string(i)).c_str(), &(pointLights[i].enabled));
+
+        ImGui::ColorEdit3(("Point color " + std::to_string(i)).c_str(),
+            (float *)&((pointLights[i].color)));
+        ImGui::InputFloat(("Point intensity " + std::to_string(i)).c_str(),
+            &(pointLights[i].intensityFactor));
+      }
 
       ImGui::End();
     }
